@@ -2895,13 +2895,7 @@ int main (int argc, char *argv[]) {
     if (!getenv("AVAHI_COMPAT_NOWARN")) putenv(avahi_compat_nowarn);
 #endif
 
-    /* for HLS video language preferences */
-    char *lang_env = getenv("LANGUAGE");
-    if (lang_env && strlen(lang_env)) {
-        lang.erase();
-        lang = lang_env;
-    }
-    
+
     char *rcfile = NULL;
     /* see if option -rc was given */
     for (int i = 1; i < argc ; i++) {
@@ -2935,6 +2929,33 @@ int main (int argc, char *argv[]) {
         log_level = LOGGER_DEBUG;
     }
 
+    bool lang_forced = !lang.empty();
+    if (lang.empty()) {
+        /* for HLS AUTOSELECT video language preferences (on Windows, valid only in MSYS2 enviroment)
+           will be overridden by -lang option */
+        char *lang_env = getenv("LANGUAGE");
+        if (lang_env && strlen(lang_env)) {
+            lang.erase();
+            lang = lang_env;
+        }
+        if (lang.empty()) {
+            lang_env = getenv("LC_ALL");
+            if (!(lang_env && strlen(lang_env))) {
+                lang_env = getenv("LC_MESSAGES");
+            }
+            if (!(lang_env && strlen(lang_env))) {
+                lang_env = getenv("LANG");
+            }
+            if (lang_env && strlen(lang_env)) {
+                lang.erase();
+                lang = lang_env;
+                size_t pos = lang.find('.');
+                if (pos != std::string::npos) {
+                    lang.erase(pos);
+                }
+            }
+        }
+    }
     
 #ifdef _WIN32    /*  use utf-8 terminal output; don't buffer stdout in WIN32 when debug_log = false */
     SetConsoleOutputCP(CP_UTF8);
@@ -3198,7 +3219,7 @@ int main (int argc, char *argv[]) {
     }
 
     if (lang.length() > 1) {
-        raop_set_lang(raop, lang.c_str());
+        raop_set_lang(raop, lang.c_str(), lang_forced);
     }
     
 #define PID_MAX 4194304 // 2^22

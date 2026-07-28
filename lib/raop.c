@@ -95,7 +95,8 @@ struct raop_s {
     unsigned char auth_fail_count;
 
   /* used for setting HLS video language choices */
-    char *lang;
+    const char *lang;
+    bool lang_forced;
 };
 
 struct raop_conn_s {
@@ -642,6 +643,7 @@ raop_init(raop_callbacks_t *callbacks) {
     raop->nonce = NULL;
 
     raop->lang = NULL;
+    raop->lang_forced = false;
     return raop;
 }
 
@@ -706,10 +708,6 @@ raop_destroy(raop_t *raop) {
         }
         if (raop->random_pw) {
             free(raop->random_pw);
-        }
-
-        if (raop->lang) {
-            free(raop->lang);
         }
 
         free(raop);
@@ -820,19 +818,14 @@ raop_set_dnssd(raop_t *raop, dnssd_t *dnssd) {
 }
 
 void
-raop_set_lang(raop_t *raop, const char *lang) {
-    if (raop->lang) {
-        free (raop->lang);
-        raop->lang = NULL;
-    }
-    if (lang && strlen(lang)) {
-        raop->lang = (char *) calloc(strlen(lang) + 1, sizeof(char));
-        memcpy(raop->lang, lang, strlen(lang));
-    }
+raop_set_lang(raop_t *raop, const char *lang, bool lang_forced) {
+    raop->lang = lang;
+    raop->lang_forced = lang_forced;
 }
 
-char *
-raop_get_lang(raop_t *raop) {
+const char *
+raop_get_lang(raop_t *raop, bool *forced) {
+    *forced = raop->lang_forced;
     return raop->lang;
 }
 
