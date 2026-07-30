@@ -177,7 +177,9 @@ static bool h265_support = false;
 static int n_video_renderers = 0;
 static int n_audio_renderers = 0;
 static bool hls_support = false;
-static std::string lang = "";
+static std::string lang_requested = "";
+static std::string lang_subtitles = "";
+static std::string lang_system = "";
 static std::string url = "";
 static guint gst_x11_window_id = 0;
 static guint video_eos_watch_id = 0;
@@ -916,8 +918,8 @@ static void print_info (char *name) {
     printf("          n=1,2,.. format = H264/5, ALAC/AAC. Default fn=\"recording\"\n");
     printf("-hls [v]  Support HTTP Live Streaming (HLS), Youtube app video only: \n");
     printf("          v = 2 or 3 (default 3) optionally selects video player version\n");
-    printf("-lang xx  HLS language preferences (\"fr:es:..\", overrides $LANGUAGE)\n");
-    printf("-lang     (or -lang 0): play undubbed HLS version (overrides $LANGUAGE)\n");
+    printf("-lang xx  Ranked user-specified HLS language preferences (\"fr:pt-BR:..\")\n");
+    printf("-slang xx Ranked user-specified HLS language preferences for subtitles only\n");
     printf("-scrsv n  Screensaver override n: 0=off 1=on while displaying video 2=always on\n");
     printf("-pin[xxxx]Use a 4-digit pin code to control client access (default: no)\n");
     printf("          default pin is random: optionally use fixed pin xxxx\n");
@@ -1730,9 +1732,14 @@ static void parse_arguments (int argc, char *argv[]) {
                 playbin_version = (guint) n;
             }
         } else if (arg == "-lang") {
-            lang.erase();
+            lang_requested.erase();
             if (i < argc - 1 && *argv[i+1] != '-') {
-                lang = argv[++i];
+                lang_requested = argv[++i];
+            }
+        } else if (arg == "-slang") {
+            lang_subtitles.erase();
+            if (i < argc - 1 && *argv[i+1] != '-') {
+                lang_subtitles = argv[++i];
             }
         } else if (arg == "-h265") {
             h265_support = true;
@@ -2928,17 +2935,14 @@ int main (int argc, char *argv[]) {
     if (debug_log && suppress_packet_debug_data) {
         log_level = LOGGER_DEBUG;
     }
-
-    bool lang_forced = !lang.empty();
-    if (lang.empty()) {
-        /* for HLS AUTOSELECT video language preferences (on Windows, valid only in MSYS2 enviroment)
-           will be overridden by -lang option */
+    if (hls_support) {
+        /* get system language choice(s) */
         char *lang_env = getenv("LANGUAGE");
         if (lang_env && strlen(lang_env)) {
-            lang.erase();
-            lang = lang_env;
+            lang_system.erase();
+            lang_system = lang_env;
         }
-        if (lang.empty()) {
+        if (lang_system.empty()) {
             lang_env = getenv("LC_ALL");
             if (!(lang_env && strlen(lang_env))) {
                 lang_env = getenv("LC_MESSAGES");
@@ -2947,16 +2951,18 @@ int main (int argc, char *argv[]) {
                 lang_env = getenv("LANG");
             }
             if (lang_env && strlen(lang_env)) {
-                lang.erase();
-                lang = lang_env;
-                size_t pos = lang.find('.');
+                lang_system.erase();
+                lang_system = lang_env;
+                size_t pos = lang_system.find('.');
                 if (pos != std::string::npos) {
-                    lang.erase(pos);
+                    lang_system.erase(pos);
                 }
+                std::replace(lang_system.begin(), lang_system.end(), '_', '-');
             }
         }
+        g_assert(!lang_system.empty());
     }
-    
+
 #ifdef _WIN32    /*  use utf-8 terminal output; don't buffer stdout in WIN32 when debug_log = false */
     SetConsoleOutputCP(CP_UTF8);
     if (!debug_log) {
@@ -3218,10 +3224,10 @@ int main (int argc, char *argv[]) {
         cleanup();
     }
 
-    if (lang.length() > 1) {
-        raop_set_lang(raop, lang.c_str(), lang_forced);
+    if (hls_support) {
+        raop_set_lang(raop, lang_requested.c_str(), lang_subtitles.c_str(), lang_system.c_str());
     }
-    
+
 #define PID_MAX 4194304 // 2^22
     if (ble_filename.length()) {
 #ifdef _WIN32

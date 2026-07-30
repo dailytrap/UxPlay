@@ -96,7 +96,8 @@ struct raop_s {
 
   /* used for setting HLS video language choices */
     const char *lang;
-    bool lang_forced;
+    const char *lang_system;
+    const char *lang_subtitles;
 };
 
 struct raop_conn_s {
@@ -643,7 +644,8 @@ raop_init(raop_callbacks_t *callbacks) {
     raop->nonce = NULL;
 
     raop->lang = NULL;
-    raop->lang_forced = false;
+    raop->lang_subtitles = NULL;
+    raop->lang_system = NULL;
     return raop;
 }
 
@@ -818,15 +820,14 @@ raop_set_dnssd(raop_t *raop, dnssd_t *dnssd) {
 }
 
 void
-raop_set_lang(raop_t *raop, const char *lang, bool lang_forced) {
-    raop->lang = lang;
-    raop->lang_forced = lang_forced;
-}
-
-const char *
-raop_get_lang(raop_t *raop, bool *forced) {
-    *forced = raop->lang_forced;
-    return raop->lang;
+raop_set_lang(raop_t *raop, const char *lang, const char *lang_subtitles, const char *lang_system) {
+    if (lang && strlen(lang)) {
+        raop->lang = lang;
+    }
+    if (lang_subtitles && strlen(lang_subtitles)) {
+        raop->lang_subtitles = lang_subtitles;
+    }
+    raop->lang_system = lang_system;
 }
 
 int
