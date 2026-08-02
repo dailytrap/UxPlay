@@ -536,6 +536,7 @@ static slice_t *master_playlist_slicer(const char *master_playlist, airplay_vide
 
     char *lang_subtitles = NULL;
     const char **lang_subtitles_list = NULL;
+    bool lang_subtitles_request = false;
     int n_lang_subtitles = 0;
     if (airplay_video->lang_subtitles) {
         lang_subtitles = (char *) calloc(strlen(airplay_video->lang_subtitles) + 1, sizeof(char));
@@ -545,6 +546,8 @@ static slice_t *master_playlist_slicer(const char *master_playlist, airplay_vide
         printf(" (%d requested languages (subtitles))\n", n_lang_subtitles);
         if (!n_lang_subtitles) {
             free(lang_subtitles);
+        } else {
+            lang_subtitles_request = true;
         }
     }
 
@@ -558,6 +561,7 @@ static slice_t *master_playlist_slicer(const char *master_playlist, airplay_vide
 
     /* first try to match user-requested languages, if present, ignoring AUTOSELECT value */
     bool audio_lang_selected = false;
+    bool audio_lang_default_selected = false;
     bool subtitle_lang_selected = false;
     bool listed_audio_languages = true;
     bool listed_subtitle_languages = true;
@@ -609,6 +613,8 @@ static slice_t *master_playlist_slicer(const char *master_playlist, airplay_vide
             if (subtitle_lang_selected || !listed_subtitle_languages) {
                 continue;
             }
+            /* if we are here, any subtitle language request was not matched */
+            lang_subtitles_request = false;
             n_lang = n_lang_system;
             lang_list = lang_system_list;
             type = 's';
@@ -653,6 +659,7 @@ static slice_t *master_playlist_slicer(const char *master_playlist, airplay_vide
             selected = match_language(lang_list, n_lang, available_list, n_list, NULL);
             if (!selected && type == 'a') {
                 selected = default_lang;
+                audio_lang_default_selected = true;
                 *subtitles = true;
             }
         } else {
@@ -702,10 +709,15 @@ static slice_t *master_playlist_slicer(const char *master_playlist, airplay_vide
 
     free(lang_system_list);
     free(lang_system);
-    
-    if (!audio_lang_selected) {
-        /* this generally means that there is a single AUDIO rendition with unspecified LANGUAGE */ 
-        *subtitles = subtitle_lang_selected;
+
+    if (subtitle_lang_selected) {
+        /* show subtitles if:
+        (1) a subtitle language in list specifed by -slang ...  was matched
+        (2) no audio language was selected (this generally means that there is
+            a single AUDIO rendition with unspecified LANGUAGE)
+        (3) a DEFAULT audio language (not found in lang_system) was selected
+        */
+        *subtitles =  (lang_subtitles_request || !audio_lang_selected || audio_lang_default_selected);
     }
 
     return slice;
@@ -717,14 +729,13 @@ char * select_master_playlist_language(airplay_video_t *airplay_video, char *mas
 
     keep just one language per AUDIO rendition group, set DEFAULT=YES, AUTOSELECT= YES.
 
-    if subtitles are present, keep only one language per SUBTITILE rendition group,
+    if subtitles are present, keep only one language per SUBTITLE rendition group,
     if subtitles should be diplayed, set DEFAULT=YES, AUTOSELECT= YES.
     if they should not be displayed, set DEFAULT=NO, AUTOSELECT= NO.
     */
     int n_slice;  
     char *new_master_playlist = master_playlist;
     bool subtitles;
-    
     slice_t *slice = master_playlist_slicer(master_playlist, airplay_video, &n_slice, &subtitles);
 
     size_t removed = 0;
